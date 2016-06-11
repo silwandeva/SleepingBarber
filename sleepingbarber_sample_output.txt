@@ -1,0 +1,222 @@
+$ pwd
+/home/users1/dr63126
+
+$ cd /home/users1/dr63126/Comp322
+
+$ ls
+a.out         lsdir.c           mywc.c       output2.txt  sleepingbarber.c
+fileaccess.c  lsdir_script.txt  output1.txt  procwc.c
+
+$ gcc sleepingbarber.c
+
+$ ./a.out
+Barber 1 is trying to get a customer
+New customer trying to find a seat
+New customer trying to find a seat
+Customer left seat in waiting room. The total free accessSeats are now: 2
+Barber 1 is waiting for the seat to become free
+Barber 1 is increasing the number of free accessSeats to 3
+Barber is now cutting hair 1
+  - wait: 1356039944
+Barber 2 is trying to get a customer
+New customer trying to find a seat
+Customer is now waiting for the barber
+Customer is now getting a hair cut
+New customer trying to find a seat
+  - wait: 1044518136
+New customer trying to find a seat
+Customer left seat in waiting room. The total free accessSeats are now: 2
+Customer is now waiting for the barber
+Barber 2 is waiting for the seat to become free
+Barber 2 is increasing the number of free accessSeats to 3
+Barber is now cutting hair 2
+  - wait: 1790447898
+Barber 3 is trying to get a customer
+New customer trying to find a seat
+Customer is now getting a hair cut
+  - wait: 750769372
+New customer trying to find a seat
+Customer left seat in waiting room. The total free accessSeats are now: 2
+Customer is now waiting for the barber
+Barber 3 is waiting for the seat to become free
+Customer left seat in waiting room. The total free accessSeats are now: 1
+Customer is now waiting for the barber
+Barber 3 is increasing the number of free accessSeats to 2
+Barber is now cutting hair 3
+  - wait: 112345426
+Barber 4 is trying to get a customer
+Barber 4 is waiting for the seat to become free
+Customer is now getting a hair cut
+Barber 4 is increasing the number of free accessSeats to 3
+Barber is now cutting hair 4
+  - wait: 1969002130
+  - wait: 37162621
+New customer trying to find a seat
+Barber 5 is trying to get a customer
+Customer left seat in waiting room. The total free accessSeats are now: 2
+Customer is now waiting for the barber
+Customer is now getting a hair cut
+  - wait: 847417384
+Customer left seat in waiting room. The total free accessSeats are now: 1
+Customer is now waiting for the barber
+Customer left seat in waiting room. The total free accessSeats are now: 0
+Customer is now waiting for the barber
+No free chairs in waiting room
+Barber 5 is waiting for the seat to become free
+Barber 5 is increasing the number of free accessSeats to 1
+  - wait: 437847458
+New customer trying to find a seat
+Barber is now cutting hair 5
+Customer left seat in waiting room. The total free accessSeats are now: 0
+  - wait: 566160930
+Customer is now getting a hair cut
+Barber 6 is trying to get a customer
+Customer is now waiting for the barber
+  - wait: 1600498270
+Barber 6 is waiting for the seat to become free
+Barber 6 is increasing the number of free accessSeats to 1
+Barber is now cutting hair 6
+Customer is now getting a hair cut
+  - wait: 1146396115
+  - wait: 153757750
+Barber 7 is trying to get a customer
+Barber 7 is waiting for the seat to become free
+Barber 7 is increasing the number of free accessSeats to 2
+Barber is now cutting hair 7
+  - wait: 125227771
+Barber 8 is trying to get a customer
+Barber 8 is waiting for the seat to become free
+Barber 8 is increasing the number of free accessSeats to 3
+Barber is now cutting hair 8
+  - wait: 1256585166
+Barber 9 is trying to get a customer
+Customer is now getting a hair cut
+Customer is now getting a hair cut
+  - wait: 93757886
+  - wait: 284606121
+New customer trying to find a seat
+Customer left seat in waiting room. The total free accessSeats are now: 2
+Customer is now waiting for the barber
+Barber 9 is waiting for the seat to become free
+Barber 9 is increasing the number of free accessSeats to 3
+Barber is now cutting hair 9
+  - wait: 1907688516
+Barber 10 is trying to get a customer
+Customer is now getting a hair cut
+  - wait: 1542715797
+
+Complete
+
+$ cat sleepingbarber.c
+/*
+Daniel Rojas
+Comp 322
+TuTh 12:30PM 
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <time.h>
+
+int accessSeats[2];
+int customers[2];
+int barber[2];
+int freeaccessSeats[2];
+
+void randomWait();
+void barber_process();
+void customer_process();
+
+void V(int pd[]) {
+   int a=1;
+   write(pd[1],&a,sizeof(int));
+}
+
+void P(int pd[]) {
+   int a;
+   read(pd[0],&a,sizeof(int));
+}
+
+void main() {
+   int i;
+   pipe(accessSeats);
+   pipe(customers);
+   pipe(barber);
+   pipe(freeaccessSeats); 
+
+   V(accessSeats); 
+
+   int num = 3; // waiting room seats = 3
+   write(freeaccessSeats[1],&num,sizeof(int));
+
+   if (fork() == 0) {
+      srand(time(0)+1); //Random Seed  
+      barber_process();
+      return;
+   }
+   
+   for (i = 1; i <= 5; i++) { 
+      if (fork() == 0) {
+         srand(time(0)+2*i); // different random seed 
+         customer_process();
+         return;
+      }
+   }
+   sleep(10);
+   printf("\nComplete\n\n");
+}
+
+void barber_process() {
+   int i; 
+   int num;
+   for (i = 1; i <= 10; ++i) {
+      printf("Barber %d is trying to get a customer\n",i);
+      P(customers); 
+      printf("Barber %d is waiting for the seat to become free\n",i);
+      P(accessSeats); 
+      read(freeaccessSeats[0],&num,sizeof(int));
+      num++; 
+      write(freeaccessSeats[1],&num,sizeof(int));
+      printf("Barber %d is increasing the number of free accessSeats to %d\n",i,num);
+      V(barber); 
+      V(accessSeats); 
+      printf("Barber is now cutting hair %d\n",i);
+      randomWait();
+   }
+}
+
+void customer_process() {
+   int i;
+   int num;
+   for (i = 1; i <= 2; ++i) {
+      printf("New customer trying to find a seat\n");
+      P(accessSeats); 
+      read(freeaccessSeats[0],&num,sizeof(int));
+      if (num > 0) 
+      {
+         num--;
+         write(freeaccessSeats[1],&num,sizeof(int));
+         printf("Customer left seat in waiting room. The total free accessSeats are now: %d\n",num);
+         V(customers); 
+         V(accessSeats); 
+         printf("Customer is now waiting for the barber\n");
+         P(barber); 
+         printf("Customer is now getting a hair cut\n");
+      }
+      else
+      {
+         write(freeaccessSeats[1],&num,sizeof(int));
+         V(accessSeats); 
+         printf("No free chairs in waiting room\n");
+      }
+      randomWait();
+   }
+}
+
+void randomWait() { // random delay 
+   int delay;
+   delay = random() % 9999999999;
+   printf("  - wait: %d\n", delay); 
+   
+}$ 
