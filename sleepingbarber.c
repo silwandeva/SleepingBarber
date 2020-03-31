@@ -1,112 +1,129 @@
-/*
-Daniel Rojas
-Comp 322
-TuTh 12:30PM 
-*/
-
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
-#include <sys/stat.h>
 #include <time.h>
+#include <pthread.h>
+#include <semaphore.h>
 
-int accessSeats[2];
-int customers[2];
-int barber[2];
-int freeaccessSeats[2];
 
-void randomWait();
-void barber_process();
-void customer_process();
+#define MAX_CUSTOMERS 25
 
-void V(int pd[]) {
-   int a=1;
-   write(pd[1],&a,sizeof(int));
+
+void *customer(void *num);
+void *barber(void *);
+
+void randwait(int secs);
+
+sem_t waitingRoom;
+
+sem_t barberChair;
+
+
+sem_t barberPillow;
+
+
+sem_t seatBelt;
+
+int allDone = 0;
+
+int main(int argc, char *argv[]) {
+pthread_t btid;
+pthread_t tid[MAX_CUSTOMERS];
+long RandSeed;
+int i, numCustomers, numChairs;
+int Number[MAX_CUSTOMERS];
+
+printf(“Enter the number of Custmors : “); scanf(“%d”,&numCustomers) ;
+printf(“Enter the number of Charis : “); scanf(“%d”,&numChairs);
+
+
+if (numCustomers > MAX_CUSTOMERS) {
+printf(“The maximum number of Customers is %d.\n”, MAX_CUSTOMERS);
+exit(-1);
 }
 
-void P(int pd[]) {
-   int a;
-   read(pd[0],&a,sizeof(int));
+
+for (i=0; i<MAX_CUSTOMERS; i++) {
+Number[i] = i;
 }
 
-void main() {
-   int i;
-   pipe(accessSeats);
-   pipe(customers);
-   pipe(barber);
-   pipe(freeaccessSeats); 
-	
-   V(accessSeats); 
-	
-   int num = 3; // waiting room seats = 3
-   write(freeaccessSeats[1],&num,sizeof(int));
-	
-   if (fork() == 0) {
-      srand(time(0)+1); //Random Seed  
-      barber_process();
-      return;
-   }
-   
-   for (i = 1; i <= 5; i++) { // five customers
-      if (fork() == 0) {
-         srand(time(0)+2*i); // different random seed 
-         customer_process();
-         return;
-      }
-   }
-   sleep(10);
-   printf("\ndone\n\n");
+sem_init(&waitingRoom, 0, numChairs);
+sem_init(&barberChair, 0, 1);
+sem_init(&barberPillow, 0, 0);
+sem_init(&seatBelt, 0, 0);
+
+
+pthread_create(&btid, NULL, barber, NULL);
+
+
+for (i=0; i<numCustomers; i++) {
+pthread_create(&tid[i], NULL, customer, (void *)&Number[i]);
+sleep(1);
 }
 
-void barber_process() {
-   int i; 
-   int num; //number of free seats
-   for (i = 1; i <= 10; ++i) {
-      printf("Barber %d is trying to get a customer\n",i);
-      P(customers); 
-      printf("Barber %d is waiting for the seat to become free\n",i);
-      P(accessSeats); 
-      read(freeaccessSeats[0],&num,sizeof(int));
-      num++; 
-      write(freeaccessSeats[1],&num,sizeof(int));
-      printf("Barber %d is increasing the number of free accessSeats to %d\n",i,num);
-      V(barber); 
-      V(accessSeats); 
-      printf("Barber is now cutting hair %d\n",i);
-      randomWait();	
-   }
+
+for (i=0; i<numCustomers; i++) {
+pthread_join(tid[i],NULL);
+sleep(1);
 }
 
-void customer_process() {
-   int i;
-   int num;
-   for (i = 1; i <= 2; ++i) {
-      printf("New customer trying to find a seat\n");
-      P(accessSeats); 
-      read(freeaccessSeats[0],&num,sizeof(int));
-      if (num > 0) 
-      {
-         num--;
-         write(freeaccessSeats[1],&num,sizeof(int));
-         printf("Customer left seat in waiting room. The total free accessSeats are now: %d\n",num);
-         V(customers); 
-         V(accessSeats); 
-         printf("Customer is now waiting for the barber\n");
-         P(barber); 
-         printf("Customer is now getting a hair cut\n");
-      }
-      else
-      {
-         write(freeaccessSeats[1],&num,sizeof(int));
-         V(accessSeats); 
-         printf("No free chairs in waiting room\n");
-      }
-      randomWait();
-   }
+
+allDone = 1;
+sem_post(&barberPillow); 
+pthread_join(btid,NULL);
 }
 
-void randomWait() { // random delay 
-   int delay;
-   delay = random() % 9999999999;
-   printf("  - wait: %d\n", delay); // debugging - value of wait time
-   
+void *customer(void *number) {
+int num = *(int *)number;
+
+
+printf(“Customer %d leaving for barber shop.\n”, num);
+randwait(2);
+printf(“Customer %d arrived at barber shop.\n”, num);
+
+
+sem_wait(&waitingRoom);
+printf(“Customer %d entering waiting room.\n”, num);
+
+
+sem_wait(&barberChair);
+
+
+sem_post(&waitingRoom);
+
+
+printf(“Customer %d waking the barber.\n”, num);
+sem_post(&barberPillow);
+
+
+sem_wait(&seatBelt);
+
+
+sem_post(&barberChair);
+printf(“Customer %d leaving barber shop.\n”, num);
+}
+
+void *barber(void *junk) {
+
+while (!allDone) {
+
+
+printf(“The barber is sleeping\n”);
+sem_wait(&barberPillow);
+
+
+if (!allDone) {
+
+
+printf(“The barber is cutting hair\n”);
+randwait(2);
+printf(“The barber has finished  hair.\n”);
+
+
+sem_post(&seatBelt);
+}
+else {
+printf(“The barber is going home for the day.\n”);
+}
+}
 }
